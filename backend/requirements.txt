@@ -1,3 +1,7 @@
+# Requirements for DocuMind Backend
+# Note: Designed and tested strictly on Python 3.11. 
+# Compatibility with 3.12+ or <3.10 is not guaranteed due to Pydantic typing behaviors.
+
 fastapi==0.111.0
 uvicorn==0.29.0
 python-multipart==0.0.9
