@@ -1,95 +1,225 @@
-# RAG Document Assistant
+<div align="center">
 
-Chat with your PDFs using Retrieval-Augmented Generation (RAG).
+# DocuMind — RAG Document Assistant
+
+**Chat with your documents using AI. Get instant answers with sources.**
+
+![Python](https://img.shields.io/badge/Python-3.11-blue?style=flat-square&logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green?style=flat-square&logo=fastapi)
+![React](https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react)
+![LangChain](https://img.shields.io/badge/LangChain-0.2-purple?style=flat-square)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_DB-orange?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
+
+</div>
+
+---
+
+## What is this?
+
+DocuMind is a full-stack RAG (Retrieval-Augmented Generation) application that lets you upload PDF documents and ask questions about them in natural language. It retrieves the most relevant sections from your documents and uses an LLM to generate accurate, grounded answers — always showing you the source so you can verify.
+
+Built from scratch with a production-grade architecture including streaming responses, conversation memory, multi-document support, scoped retrieval, AI-powered question suggestions, and a fully custom dark UI.
+
+---
+
+## Demo
+
+| Feature | Description |
+|---|---|
+| Multi-PDF support | Upload multiple documents, switch between them or query all at once |
+| Streaming answers | Responses stream token by token — no waiting |
+| Source citations | Every answer shows exactly which chunk it came from |
+| Conversation memory | Follow-up questions work naturally — it remembers context |
+| Question suggestions | AI generates contextual questions based on your loaded documents |
+| Scoped retrieval | Filter searches to a specific document or search across all |
+| RAGAS evaluation | Automated faithfulness and answer relevancy scoring |
+
+---
+
+## Architecture
+
+```
+PDF Upload
+    │
+    ▼
+Text Extraction (PyMuPDF)
+    │
+    ▼
+Chunking (RecursiveCharacterTextSplitter — 1500 chars, 200 overlap)
+    │
+    ▼
+Embeddings (HuggingFace all-MiniLM-L6-v2 — runs locally, no API cost)
+    │
+    ▼
+Vector Storage (ChromaDB — persists to disk)
+    │
+    ▼
+User Question → Embed → Cosine Similarity Search → Top-K Chunks
+    │
+    ▼
+Prompt Builder (System + Context + Chat History + Question)
+    │
+    ▼
+LLM (Groq — llama-3.1-8b-instant) → Streaming Response
+    │
+    ▼
+Answer + Source Citations → React Frontend
+```
+
+---
 
 ## Tech Stack
-- **Backend**: Python, FastAPI, LangChain, ChromaDB, OpenAI
-- **Frontend**: React (Vite), plain CSS
-- **Evaluation**: RAGAS
+
+**Backend**
+- Python 3.11
+- FastAPI — REST API with streaming support (SSE)
+- LangChain — RAG orchestration and prompt management
+- ChromaDB — vector database with metadata filtering
+- HuggingFace Sentence Transformers — local embeddings (all-MiniLM-L6-v2)
+- Groq API — LLM inference (llama-3.1-8b-instant)
+- PyMuPDF — PDF text extraction with layout awareness
+- RAGAS — automated RAG evaluation framework
+
+**Frontend**
+- React 18 with Vite
+- Custom dark UI (no component library)
+- Server-Sent Events for streaming
+- Conversation history management
+
+---
+
+## Key Technical Decisions
+
+**Why local embeddings?**
+HuggingFace's all-MiniLM-L6-v2 runs entirely on your machine — no API calls, no cost, no latency for embedding. This also means your document contents never leave your server during the ingestion phase.
+
+**Why ChromaDB over FAISS?**
+ChromaDB persists to disk automatically and supports metadata filtering out of the box. This enables scoped retrieval — filtering vector search to a specific document using `filter={"source": filename}` without maintaining a separate index per document.
+
+**Why streaming?**
+LLM responses can take 5-10 seconds for long answers. Streaming via Server-Sent Events means the first tokens appear in ~500ms — dramatically improving perceived performance without changing actual latency.
+
+**Why conversation memory?**
+Without history, every question is isolated. "What did the authors conclude?" followed by "Who were they?" breaks without memory. We pass the last 5 turns as context, trimmed to control token cost.
+
+**Chunk size tuning**
+After testing, 1500 characters with 200 overlap performed significantly better than the standard 500/50 defaults for academic and legal documents. Larger chunks preserve more semantic context per retrieval.
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Python 3.11
+- Node.js 18+
+- Groq API key (free at console.groq.com)
+
+### Installation
+
+```bash
+# Clone the repo
+git clone https://github.com/azizz7/documind.git
+cd documind
+
+# Backend setup
+cd backend
+python3.11 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# Add your API key
+echo "GROQ_API_KEY=your_key_here" > .env
+
+# Start backend
+python main.py
+```
+
+```bash
+# Frontend setup (new terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:3000
+
+---
+
+## API Reference
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | /upload | Upload and ingest a PDF |
+| POST | /chat | Standard RAG query |
+| POST | /chat/stream | Streaming RAG query (SSE) |
+| GET | /documents | List all ingested documents |
+| DELETE | /documents/{name} | Remove a document |
+| POST | /suggest-questions | Generate AI question suggestions |
+| POST | /evaluate | Run RAGAS evaluation |
+| GET | /health | Health check |
+
+---
+
+## Evaluation
+
+The project includes automated evaluation using RAGAS:
+
+- **Faithfulness** — measures if answers are grounded in retrieved context
+- **Answer Relevancy** — measures if answers actually address the question
+
+Run evaluation from the UI by clicking the Evaluate tab, or directly:
+
+```bash
+cd backend
+python evaluate.py
+```
+
+---
 
 ## Project Structure
+
 ```
-rag-document-assistant/
+documind/
 ├── backend/
 │   ├── main.py          # FastAPI routes
 │   ├── ingest.py        # PDF → chunks → embeddings → ChromaDB
-│   ├── rag.py           # query → vector search → LLM → answer
-│   ├── evaluate.py      # RAGAS faithfulness + relevancy scoring
-│   ├── requirements.txt
-│   └── .env             # OPENAI_API_KEY (never commit this)
+│   ├── rag.py           # Query pipeline with streaming + memory
+│   ├── evaluate.py      # RAGAS evaluation
+│   └── requirements.txt
 └── frontend/
     ├── src/
     │   ├── App.jsx
     │   ├── ChatWindow.jsx
     │   ├── FileUpload.jsx
-    │   ├── SourceCard.jsx
+    │   ├── DocumentList.jsx
+    │   ├── QuestionSuggestions.jsx
     │   ├── EvaluationPanel.jsx
     │   └── App.css
-    ├── package.json
-    └── vite.config.js
+    └── package.json
 ```
 
-## Setup & Run
+---
 
-### 1. Get an OpenAI API Key
-Sign up at platform.openai.com, create an API key.
+## Troubleshooting
 
-### 2. Backend setup
-```bash
-cd backend
+**"Error: Load failed. Is the backend running?"**
+Ensure the FastAPI server is running (`python main.py` in the `backend/` directory) and verify your `GROQ_API_KEY` inside `.env` is valid and active.
 
-# Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate        # Mac/Linux
-# venv\Scripts\activate         # Windows
+**"No documents have been uploaded yet"**
+The vector database is empty. Upload a PDF using the left sidebar drop-zone to initialize the collection.
 
-# Install dependencies
-pip install -r requirements.txt
+**Port 8000/3000 already in use**
+Kill existing processes using `kill $(lsof -t -i:8000)` and `kill $(lsof -t -i:3000)` respectively.
 
-# Add your API key to .env
-echo "OPENAI_API_KEY=your-key-here" > .env
+---
 
-# Start the server
-python main.py
-# Server runs at http://localhost:8000
-# Swagger docs at http://localhost:8000/docs
-```
+## License
 
-### 3. Frontend setup
-```bash
-cd frontend
-npm install
-npm run dev
-# App runs at http://localhost:3000
-```
+MIT — free to use, modify, and distribute.
 
-### 4. Use it
-1. Open http://localhost:3000
-2. Upload a PDF in the left panel
-3. Wait for ingestion to complete (~5-30 seconds depending on PDF size)
-4. Type questions in the chat
-5. Click "Evaluate" tab to run RAGAS scoring
+---
 
-## How It Works
-
-### Ingestion Pipeline (runs once per PDF)
-PDF file → pdfplumber extracts text → RecursiveCharacterTextSplitter
-splits into 500-char chunks with 50-char overlap → OpenAI text-embedding-3-small
-converts each chunk to a 1536-dim vector → ChromaDB stores vectors + text on disk
-
-### Query Pipeline (runs on every question)
-User question → embed with same model → cosine similarity search in ChromaDB
-→ retrieve top-4 chunks → build prompt (system + context + question) → GPT-4o-mini
-→ answer + source references returned to frontend
-
-### Evaluation
-RAGAS uses GPT-4 as a judge to score:
-- **Faithfulness**: are all answer claims supported by the retrieved context?
-- **Answer Relevancy**: does the answer actually address the question?
-
-## Key Design Decisions
-- **ChromaDB over FAISS**: persists to disk, no need to re-embed on restart
-- **gpt-4o-mini**: cheaper than GPT-4 for the generation step, adequate quality
-- **temperature=0**: deterministic answers for a document Q&A use case
-- **chunk_size=500, overlap=50**: good default; tune based on your document type
-- **top_k=4**: balance between enough context and avoiding irrelevant noise
+<div align="center">
+Built with LangChain · ChromaDB · Groq · React
+</div>
