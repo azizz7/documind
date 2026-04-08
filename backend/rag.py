@@ -263,6 +263,9 @@ def query_rag_stream(question: str, chat_history: list[dict] = None, doc_filter:
     # Stream the LLM tokens
     # llm.stream() returns an iterator of AIMessageChunk objects
     # Each chunk has a .content attribute with 1-3 tokens of text
+    # Note on architecture: The generator pattern allows FastAPI's StreamingResponse
+    # to hold the HTTP connection open while feeding chunks natively to the V8 JS engine
+    # on the frontend via Server-Sent Events. This elegantly bypasses websocket overhead completely.
     for chunk in llm.stream(messages):
         if chunk.content:
             # Escape newlines so they survive the SSE wire format
